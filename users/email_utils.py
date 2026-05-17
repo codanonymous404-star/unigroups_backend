@@ -41,7 +41,7 @@ def send_verification_email(user, otp_code):
 <div class="footer"><p>Superior University · UniGroups</p></div>
 </div></body></html>'''
     try:
-        send_mail(subject, text, settings.DEFAULT_FROM_EMAIL, [user.email], html_message=html, fail_silently=False)
+        send_mail(subject, text, settings.DEFAULT_FROM_EMAIL, [user.email], html_message=html, fail_silently=True)
         logger.info(f'[EMAIL] Sent to {user.email}')
         return True
     except Exception as e:
