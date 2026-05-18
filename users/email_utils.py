@@ -1,11 +1,51 @@
-from django.core.mail import send_mail
-from django.conf import settings
+import requests
 import logging
+from django.conf import settings
+
 logger = logging.getLogger(__name__)
+
+BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email'
+
+
+def _send_brevo(to_email, subject, html, text):
+    api_key = getattr(settings, 'BREVO_API_KEY', '') or ''
+    if not api_key:
+        logger.error('[EMAIL] BREVO_API_KEY not set.')
+        return False
+    try:
+        resp = requests.post(
+            BREVO_API_URL,
+            headers={
+                'api-key': api_key,
+                'Content-Type': 'application/json',
+            },
+            json={
+                'sender':      {'name': 'UniGroups', 'email': settings.DEFAULT_FROM_EMAIL},
+                'to':          [{'email': to_email}],
+                'subject':     subject,
+                'htmlContent': html,
+                'textContent': text,
+            },
+            timeout=10,
+        )
+        if resp.status_code == 201:
+            logger.info(f'[EMAIL] Sent to {to_email}')
+            return True
+        else:
+            logger.error(f'[EMAIL] Brevo error {resp.status_code}: {resp.text}')
+            return False
+    except Exception as e:
+        logger.error(f'[EMAIL] Request failed: {e}')
+        return False
+
 
 def send_verification_email(user, otp_code):
     subject = 'UniGroups — Email Verification Code'
-    text = f'Your verification code: {otp_code}\nRoll Number: {user.roll_number}\nExpires in 10 minutes.'
+    text = (
+        f'Your verification code: {otp_code}\n'
+        f'Roll Number: {user.roll_number}\n'
+        f'Expires in 10 minutes.'
+    )
     html = f'''<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>body{{font-family:Arial,sans-serif;background:#f4f5f7;margin:0;padding:0}}
 .wrap{{max-width:500px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)}}
@@ -40,18 +80,14 @@ def send_verification_email(user, otp_code):
 </div>
 <div class="footer"><p>Superior University · UniGroups</p></div>
 </div></body></html>'''
-    try:
-        send_mail(subject, text, settings.DEFAULT_FROM_EMAIL, [user.email], html_message=html, fail_silently=True)
-        logger.info(f'[EMAIL] Sent to {user.email}')
-        return True
-    except Exception as e:
-        logger.error(f'[EMAIL] Failed: {e}')
-        return False
+    return _send_brevo(user.email, subject, html, text)
+
 
 def send_welcome_email(user):
-    try:
-        dept = user.get_department_display() if user.department else 'Not set'
-        html = f'''<!DOCTYPE html><html><head><meta charset="UTF-8">
+    dept = user.get_department_display() if user.department else 'Not set'
+    subject = 'Welcome to UniGroups! 🎓'
+    text = f'Marhaba {user.name}! Your UniGroups account is verified. Roll Number: {user.roll_number}'
+    html = f'''<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>body{{font-family:Arial,sans-serif;background:#f4f5f7;margin:0}}
 .wrap{{max-width:500px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)}}
 .header{{background:linear-gradient(135deg,#6366f1,#4f46e5);padding:30px;text-align:center}}
@@ -77,6 +113,4 @@ def send_welcome_email(user):
 </div></div>
 <div class="footer"><p>Superior University · UniGroups</p></div>
 </div></body></html>'''
-        send_mail('Welcome to UniGroups! 🎓', f'Marhaba {user.name}! Your account is verified.', settings.DEFAULT_FROM_EMAIL, [user.email], html_message=html, fail_silently=True)
-    except Exception as e:
-        logger.error(f'[EMAIL] Welcome failed: {e}')
+    _send_brevo(user.email, subject, html, text)
