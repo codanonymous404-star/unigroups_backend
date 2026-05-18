@@ -4,6 +4,8 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '')
+
 SECRET_KEY    = os.environ.get('SECRET_KEY', 'django-insecure-dev-key-xyz789')
 DEBUG         = os.environ.get('DEBUG', 'False').lower() == 'true'
 raw_hosts     = os.environ.get('ALLOWED_HOSTS', '*')
