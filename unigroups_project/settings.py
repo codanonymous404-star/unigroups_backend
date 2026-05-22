@@ -28,7 +28,10 @@ INSTALLED_APPS = [
     'users',
     'groups',
     'chat',
+<<<<<<< HEAD
     'notifications',
+=======
+>>>>>>> 63a7da21ebd8ec983cf9ca698be62c4cc76c5803
 ]
 
 MIDDLEWARE = [
