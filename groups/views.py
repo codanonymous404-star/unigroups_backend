@@ -12,11 +12,6 @@ from .serializers import (
     JoinRequestSerializer, RequestActionSerializer,
     AddMemberSerializer, GroupMemberSerializer,
 )
-from notifications.utils import (
-    notify_join_request, notify_request_accepted, notify_request_rejected,
-    notify_member_removed, notify_member_added,
-    notify_group_locked, notify_group_unlocked,
-)
 
 
 class GroupListView(APIView):
@@ -110,8 +105,6 @@ class JoinRequestView(APIView):
         if JoinRequest.objects.filter(group=group, user=u, status='pending').exists():
             return Response({'success': False, 'message': 'Already have a pending request.'}, status=400)
         jr = JoinRequest.objects.create(group=group, user=u, message=msg)
-        # Notify group leader
-        notify_join_request(group, u)
         return Response({'success': True, 'message': f'Request sent to "{group.name}".',
                          'request': JoinRequestSerializer(jr).data}, status=201)
 
@@ -135,8 +128,6 @@ class AcceptRequestView(APIView):
         jr.status = 'accepted'; jr.reviewed_by = request.user; jr.reviewed_at = timezone.now(); jr.save()
         GroupMember.objects.get_or_create(group=jr.group, user=jr.user, defaults={'role':'member'})
         if jr.group.is_full: jr.group.lock()
-        # Notify requester
-        notify_request_accepted(jr)
         return Response({'success': True, 'message': f'{jr.user.name} accepted into "{jr.group.name}".'})
 
 
@@ -148,8 +139,6 @@ class RejectRequestView(APIView):
             return Response({'success': False, 'errors': s.errors}, status=400)
         jr = s.join_request
         jr.status = 'rejected'; jr.reviewed_by = request.user; jr.reviewed_at = timezone.now(); jr.save()
-        # Notify requester
-        notify_request_rejected(jr)
         return Response({'success': True, 'message': f'Request from {jr.user.name} rejected.'})
 
 
@@ -165,7 +154,6 @@ class LockGroupView(APIView):
             return Response({'success': False, 'message': 'Only leader or admin.'}, status=403)
         if group.is_locked: return Response({'success': False, 'message': 'Already locked.'})
         group.lock()
-        notify_group_locked(group)
         return Response({'success': True, 'message': f'"{group.name}" locked.'})
 
 
@@ -181,7 +169,6 @@ class UnlockGroupView(APIView):
             return Response({'success': False, 'message': 'Only leader or admin.'}, status=403)
         if not group.is_locked: return Response({'success': False, 'message': 'Not locked.'})
         group.unlock()
-        notify_group_unlocked(group)
         return Response({'success': True, 'message': f'"{group.name}" unlocked.'})
 
 
@@ -211,7 +198,6 @@ class RemoveMemberView(APIView):
         if not m: return Response({'success': False, 'message': 'Not a member.'}, status=404)
         m.delete()
         if group.is_locked and not group.is_full: group.unlock()
-        notify_member_removed(group, target)
         return Response({'success': True, 'message': f'{target.name} removed.'})
 
 
@@ -230,7 +216,6 @@ class AddMemberView(APIView):
             return Response({'success': False, 'message': 'Already member.'}, status=400)
         GroupMember.objects.create(group=group, user=user, role=s.validated_data['role'])
         if group.is_full: group.lock()
-        notify_member_added(group, user)
         return Response({'success': True, 'message': f'{user.name} added.'}, status=201)
 
 

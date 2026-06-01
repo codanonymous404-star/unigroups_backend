@@ -8,8 +8,7 @@ def health(request):
 urlpatterns = [
     path('health/', health),
     path('admin/', admin.site.urls),
-    path('api/auth/',          include('users.urls')),
-    path('api/groups/',        include('groups.urls')),
-    path('api/chat/',          include('chat.urls')),
-    path('api/notifications/', include('notifications.urls')),
+    path('api/auth/',   include('users.urls')),
+    path('api/groups/', include('groups.urls')),
+    path('api/chat/',   include('chat.urls')),
 ]
