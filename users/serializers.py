@@ -115,16 +115,26 @@ class AdminCreateUserSerializer(serializers.ModelSerializer):
         return v.upper().strip()
 
     def create(self, validated_data):
-        password = validated_data.pop('password', None)
-        role     = validated_data.get('role', 'student')
-        # auto-generate password if not provided: RollNumber@123
+        password = validated_data.pop('password', None) or None
+        role     = validated_data.pop('role', 'student')
+        rn       = validated_data['roll_number']
+
+        # Auto-generate password: ROLLNUMBER@123
         if not password:
-            rn       = validated_data['roll_number']
             password = f"{rn}@123"
-        user = User.objects.create_user(password=password, **validated_data)
-        user.is_verified = True          # admin-created users skip email verify
-        if role == 'admin':
-            user.is_staff     = True
-            user.is_superuser = True
-        user.save(update_fields=['is_verified', 'is_staff', 'is_superuser'])
+
+        # Create user with explicit args — avoid any **kwargs confusion
+        user = User(
+            roll_number = rn,
+            name        = validated_data['name'],
+            email       = validated_data['email'].lower().strip(),
+            department  = validated_data.get('department', ''),
+            role        = role,
+            is_verified = True,
+            is_active   = True,
+            is_staff    = role == 'admin',
+            is_superuser= role == 'admin',
+        )
+        user.set_password(password)   # properly hashes password
+        user.save()
         return user

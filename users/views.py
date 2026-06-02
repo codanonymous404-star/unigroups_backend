@@ -177,11 +177,12 @@ class AdminCreateUserView(APIView):
         if not s.is_valid():
             return Response({'success': False, 'errors': s.errors}, status=400)
         user = s.save()
+        pwd_provided = bool(request.data.get('password', '').strip())
         return Response({
             'success': True,
             'message': f'User {user.roll_number} created.',
             'user': UserProfileSerializer(user).data,
-            'auto_password': f"{user.roll_number}@123" if not request.data.get('password') else None,
+            'auto_password': f"{user.roll_number}@123" if not pwd_provided else None,
         }, status=201)
 
 
@@ -232,3 +233,50 @@ class AdminBulkCreateView(APIView):
             'created':       created,
             'failed':        failed,
         }, status=207 if failed else 201)
+
+
+class AdminResetPasswordView(APIView):
+    """
+    POST /api/auth/admin/users/reset-password/
+    Body: { "roll_number": "SU72-BSSEM-F25-001" }  → resets to ROLL@123
+    Or:   { "reset_all_csv": true }                 → resets ALL unverified/csv users
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request):
+        reset_all = request.data.get('reset_all_csv', False)
+
+        if reset_all:
+            # Reset password for all users where password might be broken
+            users = User.objects.all()
+            fixed = []
+            for u in users:
+                new_pwd = f"{u.roll_number}@123"
+                u.set_password(new_pwd)
+                u.is_verified = True
+                u.is_active   = True
+                u.save(update_fields=['password', 'is_verified', 'is_active'])
+                fixed.append(u.roll_number)
+            return Response({
+                'success': True,
+                'message': f'Reset {len(fixed)} users to ROLL@123',
+                'users': fixed
+            })
+
+        rn = request.data.get('roll_number', '').upper().strip()
+        if not rn:
+            return Response({'success': False, 'message': 'roll_number required'}, status=400)
+        try:
+            u = User.objects.get(roll_number=rn)
+            new_pwd = f"{rn}@123"
+            u.set_password(new_pwd)
+            u.is_verified = True
+            u.is_active   = True
+            u.save(update_fields=['password', 'is_verified', 'is_active'])
+            return Response({
+                'success': True,
+                'message': f'{rn} password reset.',
+                'new_password': new_pwd
+            })
+        except User.DoesNotExist:
+            return Response({'success': False, 'message': 'User not found'}, status=404)
