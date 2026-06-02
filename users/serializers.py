@@ -91,3 +91,40 @@ class VerifyOTPSerializer(serializers.Serializer):
             raise serializers.ValidationError('Invalid or expired code. Request a new one.')
         self.user = user
         return attrs
+
+
+# ── Admin-side user creation (no OTP, no email verification needed) ──────────
+class AdminCreateUserSerializer(serializers.ModelSerializer):
+    roll_number = serializers.CharField(validators=[validate_roll])
+    password    = serializers.CharField(write_only=True, required=False, default=None)
+    role        = serializers.ChoiceField(choices=['student', 'admin'], default='student')
+
+    class Meta:
+        model  = User
+        fields = ['roll_number', 'name', 'email', 'password', 'department', 'role']
+        extra_kwargs = {'department': {'required': False, 'default': ''}}
+
+    def validate_email(self, v):
+        if User.objects.filter(email__iexact=v).exists():
+            raise serializers.ValidationError('Email already registered.')
+        return v.lower().strip()
+
+    def validate_roll_number(self, v):
+        if User.objects.filter(roll_number__iexact=v).exists():
+            raise serializers.ValidationError('Roll number already registered.')
+        return v.upper().strip()
+
+    def create(self, validated_data):
+        password = validated_data.pop('password', None)
+        role     = validated_data.get('role', 'student')
+        # auto-generate password if not provided: RollNumber@123
+        if not password:
+            rn       = validated_data['roll_number']
+            password = f"{rn}@123"
+        user = User.objects.create_user(password=password, **validated_data)
+        user.is_verified = True          # admin-created users skip email verify
+        if role == 'admin':
+            user.is_staff     = True
+            user.is_superuser = True
+        user.save(update_fields=['is_verified', 'is_staff', 'is_superuser'])
+        return user

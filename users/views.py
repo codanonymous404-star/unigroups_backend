@@ -162,3 +162,73 @@ class UserDetailView(APIView):
         if u == request.user: return Response({'success': False, 'message': 'Cannot delete yourself.'}, status=400)
         u.delete()
         return Response({'success': True, 'message': f'{u.name} deleted.'})
+
+
+# ── Admin: single + bulk user creation ───────────────────────────────────────
+import csv, io
+from .serializers import AdminCreateUserSerializer
+
+class AdminCreateUserView(APIView):
+    """POST /api/auth/admin/users/create/  — create one user"""
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request):
+        s = AdminCreateUserSerializer(data=request.data)
+        if not s.is_valid():
+            return Response({'success': False, 'errors': s.errors}, status=400)
+        user = s.save()
+        return Response({
+            'success': True,
+            'message': f'User {user.roll_number} created.',
+            'user': UserProfileSerializer(user).data,
+            'auto_password': f"{user.roll_number}@123" if not request.data.get('password') else None,
+        }, status=201)
+
+
+class AdminBulkCreateView(APIView):
+    """
+    POST /api/auth/admin/users/bulk-create/
+    Accepts either:
+      - JSON body: { "users": [ {roll_number, name, email, department?, role?}, ... ] }
+      - CSV file:  multipart form-data field 'file' with columns:
+                   roll_number, name, email, department (optional), role (optional)
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request):
+        # ── CSV upload ───────────────────────────────────────────────────────
+        if 'file' in request.FILES:
+            f       = request.FILES['file']
+            text    = f.read().decode('utf-8-sig')        # strips BOM if present
+            reader  = csv.DictReader(io.StringIO(text))
+            rows    = [dict(r) for r in reader]
+        else:
+            rows = request.data.get('users', [])
+
+        if not rows:
+            return Response({'success': False, 'message': 'No user data provided.'}, status=400)
+
+        created, failed = [], []
+
+        for idx, row in enumerate(rows):
+            # strip whitespace from every field
+            clean = {k.strip(): (v.strip() if isinstance(v, str) else v) for k, v in row.items()}
+            s = AdminCreateUserSerializer(data=clean)
+            if s.is_valid():
+                user = s.save()
+                created.append({
+                    'roll_number':   user.roll_number,
+                    'name':          user.name,
+                    'auto_password': f"{user.roll_number}@123" if not clean.get('password') else None,
+                })
+            else:
+                failed.append({'row': idx + 1, 'data': clean, 'errors': s.errors})
+
+        return Response({
+            'success':       True,
+            'total':         len(rows),
+            'created_count': len(created),
+            'failed_count':  len(failed),
+            'created':       created,
+            'failed':        failed,
+        }, status=207 if failed else 201)
