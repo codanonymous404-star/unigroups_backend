@@ -298,3 +298,29 @@ class AdminDeleteAllUsersView(APIView):
             'message': f'Deleted {count} student users. Admin accounts untouched.',
             'deleted_count': count
         })
+
+
+class ChangePasswordView(APIView):
+    """POST /api/auth/change-password/"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        old_password = request.data.get('old_password', '')
+        new_password = request.data.get('new_password', '')
+        confirm      = request.data.get('confirm_password', '')
+
+        if not old_password or not new_password or not confirm:
+            return Response({'success': False, 'message': 'All fields required.'}, status=400)
+
+        if not request.user.check_password(old_password):
+            return Response({'success': False, 'message': 'Current password is incorrect.'}, status=400)
+
+        if new_password != confirm:
+            return Response({'success': False, 'message': 'New passwords do not match.'}, status=400)
+
+        if len(new_password) < 8:
+            return Response({'success': False, 'message': 'Password must be at least 8 characters.'}, status=400)
+
+        request.user.set_password(new_password)
+        request.user.save(update_fields=['password'])
+        return Response({'success': True, 'message': 'Password changed successfully.'})
