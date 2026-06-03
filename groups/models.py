@@ -2,11 +2,29 @@ from django.db   import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
 
+
+class Subject(models.Model):
+    DEPTS = [('SE','Software Engineering'),('CS','Computer Science')]
+    name       = models.CharField(max_length=100)
+    code       = models.CharField(max_length=20)          # short code e.g. ENG, PROG
+    department = models.CharField(max_length=2, choices=DEPTS)
+    is_active  = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table        = 'subjects'
+        ordering        = ['department', 'name']
+        unique_together = [['code', 'department']]
+
+    def __str__(self): return f"{self.name} ({self.department})"
+
+
 class Group(models.Model):
     DEPTS    = [('SE','Software Engineering'),('CS','Computer Science')]
     STATUSES = [('open','Open'),('locked','Locked')]
 
-    name        = models.CharField(max_length=200)
+    name        = models.CharField(max_length=200, blank=True)  # auto-generated
+    subject     = models.ForeignKey('Subject', on_delete=models.SET_NULL, null=True, blank=True, related_name='groups')
     department  = models.CharField(max_length=2, choices=DEPTS, default='SE')
     description = models.TextField(blank=True, default='')
     max_members = models.PositiveIntegerField(default=5, validators=[MinValueValidator(2),MaxValueValidator(20)])

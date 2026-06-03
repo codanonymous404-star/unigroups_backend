@@ -7,6 +7,7 @@ from .views import (
     LockGroupView, UnlockGroupView,
     GroupMembersView, RemoveMemberView, AddMemberView,
     MyGroupsView,
+    SubjectListView, AdminSubjectView,
 )
 
 urlpatterns = [
@@ -25,4 +26,6 @@ urlpatterns = [
     path('remove-member/',          RemoveMemberView.as_view()),
     path('add-member/',             AddMemberView.as_view()),
     path('my-groups/',              MyGroupsView.as_view()),
+    path('subjects/',                  SubjectListView.as_view()),
+    path('subjects/manage/',           AdminSubjectView.as_view()),
 ]

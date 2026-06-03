@@ -229,3 +229,71 @@ class MyGroupsView(APIView):
             d['my_role'] = m.role
             result.append(d)
         return Response({'success': True, 'count': len(result), 'groups': result})
+
+
+# ── Subject views ─────────────────────────────────────────────────────────────
+from .models import Subject
+from .serializers import SubjectSerializer
+from users.permissions import IsAdminUser
+
+class SubjectListView(APIView):
+    """GET /api/groups/subjects/?dept=SE  — list active subjects"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = Subject.objects.filter(is_active=True)
+        dept = request.query_params.get('dept')
+        if dept:
+            qs = qs.filter(department=dept)
+        return Response({'subjects': SubjectSerializer(qs, many=True).data})
+
+
+class AdminSubjectView(APIView):
+    """
+    GET    /api/groups/subjects/manage/   — list all (admin)
+    POST   /api/groups/subjects/manage/   — create subject
+    PATCH  /api/groups/subjects/manage/   — toggle active {id, is_active}
+    DELETE /api/groups/subjects/manage/   — delete {id}
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        qs = Subject.objects.all()
+        return Response({'subjects': SubjectSerializer(qs, many=True).data})
+
+    def post(self, request):
+        name = request.data.get('name', '').strip()
+        code = request.data.get('code', '').strip().upper()
+        dept = request.data.get('department', '').strip()
+        if not name or not code or not dept:
+            return Response({'success': False, 'message': 'name, code, department required.'}, status=400)
+        if dept not in ['SE', 'CS']:
+            return Response({'success': False, 'message': 'department must be SE or CS.'}, status=400)
+        if Subject.objects.filter(code=code, department=dept).exists():
+            return Response({'success': False, 'message': f'{code} already exists for {dept}.'}, status=400)
+        s = Subject.objects.create(name=name, code=code, department=dept)
+        return Response({'success': True, 'subject': SubjectSerializer(s).data}, status=201)
+
+    def patch(self, request):
+        sid = request.data.get('id')
+        try:
+            s = Subject.objects.get(pk=sid)
+        except Subject.DoesNotExist:
+            return Response({'success': False, 'message': 'Not found.'}, status=404)
+        is_active = request.data.get('is_active')
+        if is_active is not None:
+            s.is_active = bool(is_active)
+        name = request.data.get('name', '').strip()
+        if name:
+            s.name = name
+        s.save()
+        return Response({'success': True, 'subject': SubjectSerializer(s).data})
+
+    def delete(self, request):
+        sid = request.data.get('id')
+        try:
+            s = Subject.objects.get(pk=sid)
+        except Subject.DoesNotExist:
+            return Response({'success': False, 'message': 'Not found.'}, status=404)
+        s.delete()
+        return Response({'success': True, 'message': 'Subject deleted.'})

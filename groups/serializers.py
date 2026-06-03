@@ -1,6 +1,12 @@
 from rest_framework import serializers
 from users.serializers import UserProfileSerializer
-from .models import Group, GroupMember, JoinRequest
+from .models import Group, GroupMember, JoinRequest, Subject
+
+class SubjectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = Subject
+        fields = ['id', 'name', 'code', 'department', 'is_active']
+
 
 class GroupMemberSerializer(serializers.ModelSerializer):
     user = UserProfileSerializer(read_only=True)
@@ -25,10 +31,12 @@ class GroupListSerializer(serializers.ModelSerializer):
     department_display = serializers.SerializerMethodField()
     class Meta:
         model  = Group
-        fields = ['id','name','department','department_display','description','max_members','member_count','slots_remaining','status','is_locked','leader_name','created_at']
+        fields = ['id','name','subject','subject_name','department','department_display','description','max_members','member_count','slots_remaining','status','is_locked','leader_name','created_at']
     def get_leader_name(self, obj):
         l = obj.get_leader(); return l.name if l else None
+    subject_name = serializers.SerializerMethodField()
     def get_department_display(self, obj): return obj.get_department_display()
+    def get_subject_name(self, obj): return obj.subject.name if obj.subject else None
 
 class GroupDetailSerializer(serializers.ModelSerializer):
     members            = GroupMemberSerializer(source='memberships', many=True, read_only=True)
@@ -52,10 +60,24 @@ class GroupDetailSerializer(serializers.ModelSerializer):
 
 class GroupCreateSerializer(serializers.ModelSerializer):
     member_ids = serializers.ListField(child=serializers.IntegerField(), required=False, default=list, write_only=True)
+    subject_id = serializers.IntegerField(write_only=True)
+
     class Meta:
         model  = Group
-        fields = ['id','name','department','description','max_members','member_ids']
-        extra_kwargs = {'description':{'required':False},'department':{'required':True}}
+        fields = ['id','name','subject_id','department','description','max_members','member_ids']
+        extra_kwargs = {
+            'description': {'required': False},
+            'department':  {'required': False},
+            'name':        {'read_only': True},
+        }
+
+    def validate_subject_id(self, v):
+        try:
+            subj = Subject.objects.get(pk=v, is_active=True)
+        except Subject.DoesNotExist:
+            raise serializers.ValidationError('Invalid or inactive subject.')
+        self._subject = subj
+        return v
 
     def validate_max_members(self, v):
         if v < 2:  raise serializers.ValidationError('Minimum 2.')
@@ -64,9 +86,22 @@ class GroupCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         from users.models import User as U
-        ids   = validated_data.pop('member_ids', [])
+        ids        = validated_data.pop('member_ids', [])
+        subject_id = validated_data.pop('subject_id')
+        subj       = self._subject
+
+        # Auto-generate group name: CODE-N (e.g. ENG-1, ENG-2)
+        existing = Group.objects.filter(subject=subj).count()
+        auto_name = f"{subj.code}-{existing + 1}"
+
         user  = self.context['request'].user
-        group = Group.objects.create(created_by=user, **validated_data)
+        group = Group.objects.create(
+            created_by  = user,
+            subject     = subj,
+            name        = auto_name,
+            department  = subj.department,
+            **{k: v for k, v in validated_data.items() if k != 'department'}
+        )
         GroupMember.objects.create(group=group, user=user, role='leader')
         for uid in ids:
             if uid == user.id: continue
