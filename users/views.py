@@ -280,3 +280,21 @@ class AdminResetPasswordView(APIView):
             })
         except User.DoesNotExist:
             return Response({'success': False, 'message': 'User not found'}, status=404)
+
+
+class AdminDeleteAllUsersView(APIView):
+    """
+    DELETE /api/auth/admin/users/delete-all/
+    Deletes all non-admin users. Admin accounts safe rehte hain.
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def delete(self, request):
+        deleted_qs = User.objects.filter(role='student')
+        count = deleted_qs.count()
+        deleted_qs.delete()
+        return Response({
+            'success': True,
+            'message': f'Deleted {count} student users. Admin accounts untouched.',
+            'deleted_count': count
+        })

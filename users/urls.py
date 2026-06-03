@@ -5,6 +5,7 @@ from .views import (
     LoginView, LogoutView, ProfileView,
     ClassmatesView, UserListView, UserDetailView,
     AdminCreateUserView, AdminBulkCreateView, AdminResetPasswordView,
+    AdminDeleteAllUsersView,
 )
 
 urlpatterns = [
@@ -22,4 +23,5 @@ urlpatterns = [
     path('admin/users/create/',          AdminCreateUserView.as_view()),
     path('admin/users/bulk-create/',     AdminBulkCreateView.as_view()),
     path('admin/users/reset-password/',   AdminResetPasswordView.as_view()),
+    path('admin/users/delete-all/',          AdminDeleteAllUsersView.as_view()),
 ]
