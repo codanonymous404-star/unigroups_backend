@@ -3,7 +3,7 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('groups', '0001_initial'),
+        ('groups', '0002_initial'),   # depends on existing 0002_initial
     ]
     operations = [
         migrations.CreateModel(
