@@ -30,12 +30,36 @@ class GroupListView(APIView):
         my_dept = None
         if request.user.is_authenticated and not request.user.is_admin:
             my_dept = request.user.department
+        # Build by_department with subjects nested inside
+        def build_dept(groups_qs):
+            serialized = GroupListSerializer(groups_qs, many=True).data
+            # Group by subject
+            subjects_map = {}
+            no_subject   = []
+            for g in serialized:
+                subj_id   = g.get('subject')
+                subj_name = g.get('subject_name')
+                if subj_id and subj_name:
+                    key = subj_id
+                    if key not in subjects_map:
+                        subjects_map[key] = {'id': subj_id, 'name': subj_name, 'groups': []}
+                    subjects_map[key]['groups'].append(g)
+                else:
+                    no_subject.append(g)
+            subjects_list = list(subjects_map.values())
+            if no_subject:
+                subjects_list.append({'id': None, 'name': 'General', 'groups': no_subject})
+            return {'groups': serialized, 'by_subject': subjects_list}
+
+        se_data = build_dept(se)
+        cs_data = build_dept(cs)
+
         return Response({
             'success': True, 'count': len(all_list), 'my_dept': my_dept,
             'groups':  GroupListSerializer(all_list, many=True).data,
             'by_department': {
-                'SE': {'label':'Software Engineering','is_mine': my_dept=='SE','groups': GroupListSerializer(se, many=True).data},
-                'CS': {'label':'Computer Science',    'is_mine': my_dept=='CS','groups': GroupListSerializer(cs, many=True).data},
+                'SE': {'label': 'Software Engineering', 'is_mine': my_dept == 'SE', **se_data},
+                'CS': {'label': 'Computer Science',     'is_mine': my_dept == 'CS', **cs_data},
             }
         })
 
