@@ -237,7 +237,9 @@ from .serializers import SubjectSerializer
 from users.permissions import IsAdminUser
 
 class SubjectListView(APIView):
-    """GET /api/groups/subjects/?dept=SE  — list active subjects"""
+    """GET /api/groups/subjects/?dept=SE  — list active subjects
+       Also returns per-subject: already_taken_user_ids (members of non-full groups)
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -245,7 +247,21 @@ class SubjectListView(APIView):
         dept = request.query_params.get('dept')
         if dept:
             qs = qs.filter(department=dept)
-        return Response({'subjects': SubjectSerializer(qs, many=True).data})
+
+        # For each subject, collect user IDs already in a group for that subject
+        from .models import GroupMember
+        subjects_data = []
+        for subj in qs:
+            data = SubjectSerializer(subj).data
+            taken_ids = list(
+                GroupMember.objects.filter(
+                    group__subject=subj
+                ).values_list('user_id', flat=True).distinct()
+            )
+            data['already_taken_user_ids'] = taken_ids
+            subjects_data.append(data)
+
+        return Response({'subjects': subjects_data})
 
 
 class AdminSubjectView(APIView):
